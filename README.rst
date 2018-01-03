@@ -40,7 +40,7 @@ Example
 
     import pyansible.playbooks
 
-    runner = playbooks.Runner(hosts_file=/opt/ansible/hosts, playbook_file=/opt/ansible/uptime.yml, verbosity=0)
+    runner = playbooks.Runner(hosts_file=\'/opt/ansible/hosts\', playbook_file=\'/opt/ansible/uptime.yml\', verbosity=0)
     runner.run() 
     EOF
 

@@ -13,11 +13,11 @@ class Options(object):
     """
     def __init__(self, ask_pass=None, ask_su_pass=None, ask_sudo_pass=None, ask_vault_pass=None, become=None,
                  become_ask_pass=None, become_method=None, become_user=None, check=None, connection=None,
-                 diff=None, extra_vars=None, flush_cache=None, forks=None, inventory=None, listhosts=None,
-                 listtags=None, listtasks=None, module_path=None, new_vault_id=None, new_vault_password_file=None,
+                 diff=None, extra_vars=None, flush_cache=None, forks=100, inventory=None, listhosts=None,
+                 listtags={}, listtasks=None, module_path=None, new_vault_id=None, new_vault_password_file=None,
                  private_key_file=None, remote_user=None, scp_extra_args=None, sftp_extra_args=None,
-                 skip_tags=None, ssh_common_args=None, ssh_extra_args=None, start_at_task=None, step=None,
-                 su=None, su_user=None, subset=None, sudo=None, sudo_user=None, syntax=None, tags=None,
+                 skip_tags={}, ssh_common_args=None, ssh_extra_args=None, start_at_task=None, step=None,
+                 su=None, su_user=None, subset=None, sudo=None, sudo_user=None, syntax=None, tags={},
                  timeout=None, vault_ids=None, vault_password_files=None, verbosity=None):
 
         self.ask_pass = ask_pass
@@ -71,16 +71,20 @@ class Options(object):
 
 class Runner(object):
 
-    def __init__(self, cfg_file, hosts_file, playbook_file, private_key_file, module_path, run_data, become_pass, verbosity=0):
+    def __init__(self, hosts_file, playbook_file, cfg_file=None, vault_id=None, private_key_file=None, module_path=None, become_pass=None, verbosity=0):
 
         self.hosts_file = hosts_file
         self.playbook_file = playbook_file
-        self.run_data = run_data
+        self.vault_id = vault_id
 
+        if cfg_file:
+            os.environ['ANSIBLE_CONFIG']=cfg_file
         self.options = Options()
-        self.options.private_key_file = private_key_file
+        if private_key_file:
+            self.options.private_key_file = private_key_file
         self.options.verbosity = verbosity
-        self.options.module_path = module_path
+        if module_path:
+            self.options.module_path = module_path
         self.options.connection = 'ssh'
 
         # set verbosity
@@ -99,11 +103,19 @@ class Runner(object):
 
         # Gets data from YAML/JSON files
         self.loader = DataLoader()
-        self.loader.set_vault_password(os.environ['VAULT_PASS'])
+
+        # vault secrets valut_id=name@password
+        vault_secrets = []
+        if self.vault_id:
+            vault_ids = vault_id.split(',', vault_id) if ',' in vault_id else [vault_id]
+            for vid in vault_ids:
+                vault_secrets.append(tuple(vid.split(',',1)))
+        if vault_secrets: 
+            self.loader.set_vault_secrets(vault_secrets)
 
         # Set inventory, using most of above objects
-        self.inventory = Inventory(loader=self.loader, variable_manager=self.variable_manager, host_list=self.hosts_file)
-        self.variable_manager = VariableManager(loader=loader, inventory=inventory)
+        self.inventory = InventoryManager(loader=self.loader, sources=self.hosts_file)
+        self.variable_manager = VariableManager(loader=self.loader, inventory=self.inventory)
 
         # Setup playbook executor, but don't run until run() called
         self.pbex = playbook_executor.PlaybookExecutor(
